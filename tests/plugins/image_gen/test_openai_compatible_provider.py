@@ -149,6 +149,35 @@ class TestOpenAICompatibleImageGenProvider:
         mock_get.assert_not_called()
         mock_post.assert_not_called()
 
+    def test_generation_timeout_reads_image_gen_config(self, monkeypatch):
+        from plugins.image_gen.openai_compatible import OpenAICompatibleImageGenProvider
+
+        monkeypatch.setenv("OPENAI_COMPATIBLE_IMAGE_MODEL", "cx/gpt-5.5")
+
+        catalog_resp = MagicMock()
+        catalog_resp.raise_for_status = MagicMock()
+        catalog_resp.json.return_value = {
+            "data": [{
+                "id": "cx/gpt-5.5",
+                "input_modalities": ["text"],
+                "supported_sizes": ["1024x1024"],
+            }]
+        }
+        gen_resp = MagicMock()
+        gen_resp.raise_for_status = MagicMock()
+        gen_resp.json.return_value = {"data": [{"url": "http://localhost/result.png"}]}
+
+        with patch("hermes_cli.config.load_config", return_value={"image_gen": {"timeout": 420}}), \
+             patch("plugins.image_gen.openai_compatible.requests.get", return_value=catalog_resp), \
+             patch("plugins.image_gen.openai_compatible.requests.post", return_value=gen_resp) as mock_post:
+            result = OpenAICompatibleImageGenProvider().generate(
+                prompt="slow codex image generation",
+                aspect_ratio="square",
+            )
+
+        assert result["success"] is True
+        assert mock_post.call_args.kwargs["timeout"] == 420
+
     def test_register(self):
         from plugins.image_gen.openai_compatible import OpenAICompatibleImageGenProvider, register
 

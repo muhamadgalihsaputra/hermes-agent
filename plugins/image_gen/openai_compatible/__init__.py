@@ -41,7 +41,7 @@ from agent.image_gen_provider import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "http://localhost:20128/v1"
-DEFAULT_TIMEOUT = 180
+DEFAULT_TIMEOUT = 420
 
 _SIZES = {
     "landscape": "1024x1024",
@@ -88,6 +88,25 @@ def _base_url() -> str:
 
 def _catalog_url() -> str:
     return f"{_base_url()}/images/generations"
+
+
+def _request_timeout() -> int:
+    """Return image-generation request timeout in seconds.
+
+    OpenAI-compatible image models can legitimately take several minutes. The
+    provider default is intentionally longer than generic tool/network defaults,
+    while still allowing users to override it in config.yaml.
+    """
+    cfg = _load_openai_compatible_config()
+    top_cfg = _load_image_gen_config()
+    raw = cfg.get("timeout") or top_cfg.get("timeout")
+    if raw is None:
+        return DEFAULT_TIMEOUT
+    try:
+        timeout = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_TIMEOUT
+    return timeout if timeout > 0 else DEFAULT_TIMEOUT
 
 
 def _normalise_catalog_payload(payload: Any) -> List[Dict[str, Any]]:
@@ -330,16 +349,17 @@ class OpenAICompatibleImageGenProvider(ImageGenProvider):
             payload["image_url"] = reference_uri
 
         try:
+            timeout = _request_timeout()
             response = requests.post(
                 f"{_base_url()}/images/generations",
                 json=payload,
-                timeout=DEFAULT_TIMEOUT,
+                timeout=timeout,
             )
             response.raise_for_status()
             result = response.json()
         except requests.Timeout:
             return error_response(
-                error=f"OpenAI-compatible image generation timed out ({DEFAULT_TIMEOUT}s)",
+                error=f"OpenAI-compatible image generation timed out ({_request_timeout()}s)",
                 error_type="timeout",
                 provider="openai-compatible",
                 model=model_id,
