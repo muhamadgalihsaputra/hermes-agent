@@ -26,8 +26,9 @@ import os
 import datetime
 import threading
 import uuid
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
-from urllib.parse import urlencode
+from urllib.parse import unquote, urlencode, urlparse
 
 # fal_client is imported lazily — see _load_fal_client(). Pulling it
 # eagerly added ~64 ms to every CLI cold start because
@@ -915,6 +916,13 @@ IMAGE_GENERATE_SCHEMA = {
                 "description": "The aspect ratio of the generated image. 'landscape' is 16:9 wide, 'portrait' is 16:9 tall, 'square' is 1:1.",
                 "default": DEFAULT_ASPECT_RATIO,
             },
+            "image_url": {
+                "type": "string",
+                "description": (
+                    "Optional reference image as a local file path or file:// URL. "
+                    "Only providers that support image input will use it."
+                ),
+            },
         },
         "required": ["prompt"],
     },
@@ -957,7 +965,65 @@ def _read_configured_image_provider():
     return None
 
 
-def _dispatch_to_plugin_provider(prompt: str, aspect_ratio: str):
+def _normalise_local_reference_image(image_url: str) -> Union[str, Dict[str, Any]]:
+    """Validate and normalize a reference image path for provider dispatch.
+
+    The core tool accepts local filesystem paths and ``file://`` URLs only.
+    Remote URL fetching is intentionally left to providers so the generic tool
+    does not become an SSRF surface or silently download user-controlled files.
+    """
+    raw = (image_url or "").strip()
+    if not raw:
+        return ""
+
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.scheme != "file":
+        return {
+            "success": False,
+            "image": None,
+            "error": "Reference image must be a local file path or file:// URL",
+            "error_type": "invalid_reference_image",
+        }
+
+    if parsed.scheme == "file":
+        if parsed.netloc not in ("", "localhost"):
+            return {
+                "success": False,
+                "image": None,
+                "error": "Reference image file:// URL must point to localhost",
+                "error_type": "invalid_reference_image",
+            }
+        path = Path(unquote(parsed.path))
+    else:
+        path = Path(raw).expanduser()
+
+    try:
+        resolved = path.resolve(strict=False)
+    except Exception:
+        resolved = path
+
+    if not resolved.is_file():
+        return {
+            "success": False,
+            "image": None,
+            "error": f"Reference image file not found: {resolved}",
+            "error_type": "invalid_reference_image",
+        }
+    if not os.access(resolved, os.R_OK):
+        return {
+            "success": False,
+            "image": None,
+            "error": f"Reference image file is not readable: {resolved}",
+            "error_type": "invalid_reference_image",
+        }
+    return str(resolved)
+
+
+def _dispatch_to_plugin_provider(
+    prompt: str,
+    aspect_ratio: str,
+    image_url: Optional[str] = None,
+):
     """Route the call to a plugin-registered provider when one is selected.
 
     Returns a JSON string on dispatch, or ``None`` to fall through to the
@@ -972,8 +1038,18 @@ def _dispatch_to_plugin_provider(prompt: str, aspect_ratio: str):
     if not configured or configured == "fal":
         return None
 
-    # Also read configured model so we can pass it to the plugin
+    # Also read configured model so we can pass it to the plugin.
     configured_model = _read_configured_image_model()
+
+    provider_kwargs: Dict[str, Any] = {}
+    if configured_model:
+        provider_kwargs["model"] = configured_model
+    if image_url:
+        normalized = _normalise_local_reference_image(image_url)
+        if isinstance(normalized, dict):
+            return json.dumps(normalized)
+        if normalized:
+            provider_kwargs["image_url"] = normalized
 
     try:
         # Import locally so plugin discovery isn't triggered just by
@@ -1010,10 +1086,11 @@ def _dispatch_to_plugin_provider(prompt: str, aspect_ratio: str):
         })
 
     try:
-        kwargs = {"prompt": prompt, "aspect_ratio": aspect_ratio}
-        if configured_model:
-            kwargs["model"] = configured_model
-        result = provider.generate(**kwargs)
+        result = provider.generate(
+            prompt=prompt,
+            aspect_ratio=aspect_ratio,
+            **provider_kwargs,
+        )
     except Exception as exc:
         logger.warning(
             "Image gen provider '%s' raised: %s",
@@ -1040,10 +1117,11 @@ def _handle_image_generate(args, **kw):
     if not prompt:
         return tool_error("prompt is required for image generation")
     aspect_ratio = args.get("aspect_ratio", DEFAULT_ASPECT_RATIO)
+    image_url = args.get("image_url")
 
     # Route to a plugin-registered provider if one is active (and it's
     # not the in-tree FAL path).
-    dispatched = _dispatch_to_plugin_provider(prompt, aspect_ratio)
+    dispatched = _dispatch_to_plugin_provider(prompt, aspect_ratio, image_url=image_url)
     if dispatched is not None:
         return dispatched
 
