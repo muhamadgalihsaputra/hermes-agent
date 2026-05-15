@@ -265,14 +265,22 @@ class GatewayStreamConsumer:
             return f"{self._discord_stream_mention_prefix}{text.lstrip()}"
         return text
 
-    def _split_text_chunks_for_platform(self, text: str, limit: int) -> list[str]:
+    def _split_text_chunks_for_platform(
+        self,
+        text: str,
+        limit: int,
+        len_fn: "Callable[[str], int]" = len,
+    ) -> list[str]:
         splitter = getattr(self.adapter, "_split_text_for_send", None)
         if callable(splitter):
             try:
                 return splitter(text, max_length=limit)
             except TypeError:
                 return splitter(text)
-        return self.adapter.truncate_message(text, limit)
+        try:
+            return self.adapter.truncate_message(text, limit, len_fn=len_fn)
+        except TypeError:
+            return self.adapter.truncate_message(text, limit)
 
     def on_delta(self, text: str) -> None:
         """Thread-safe callback — called from the agent's worker thread.
@@ -486,7 +494,7 @@ class GatewayStreamConsumer:
                         # proper word/code-fence boundaries and chunk
                         # indicators like "(1/2)".
                         chunks = self._split_text_chunks_for_platform(
-                            self._accumulated, _safe_limit
+                            self._accumulated, _safe_limit, len_fn=_len_fn
                         )
                         chunks_delivered = False
                         reply_to = self._message_id or self._initial_reply_to_id
