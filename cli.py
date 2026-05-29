@@ -382,6 +382,10 @@ def load_cli_config() -> Dict[str, Any]:
             "inactivity_timeout": 120,  # Auto-cleanup inactive browser sessions after 2 min
             "record_sessions": False,  # Auto-record browser sessions as WebM videos
             "engine": "auto",  # Browser engine: auto (Chrome), lightpanda, chrome
+            "camofox": {
+                "rewrite_loopback_urls": False,
+                "loopback_host_alias": "host.docker.internal",
+            },
         },
         "compression": {
             "enabled": True,      # Auto-compress when approaching context limit
@@ -576,6 +580,8 @@ def load_cli_config() -> Dict[str, Any]:
         "docker_env": "TERMINAL_DOCKER_ENV",
         "docker_mount_cwd_to_workspace": "TERMINAL_DOCKER_MOUNT_CWD_TO_WORKSPACE",
         "docker_run_as_host_user": "TERMINAL_DOCKER_RUN_AS_HOST_USER",
+        "docker_persist_across_processes": "TERMINAL_DOCKER_PERSIST_ACROSS_PROCESSES",
+        "docker_orphan_reaper": "TERMINAL_DOCKER_ORPHAN_REAPER",
         "sandbox_dir": "TERMINAL_SANDBOX_DIR",
         # Persistent shell (non-local backends)
         "persistent_shell": "TERMINAL_PERSISTENT_SHELL",
