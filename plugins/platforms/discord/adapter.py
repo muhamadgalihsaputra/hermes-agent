@@ -674,7 +674,7 @@ class DiscordAdapter(BasePlatformAdapter):
         """Split outgoing text, preserving bot-to-bot mentions on chunks."""
         repeat_raw = os.getenv(
             "DISCORD_REPEAT_MENTIONS_ON_SPLIT",
-            os.getenv("DISCORD_REPEAT_LEADING_MENTIONS_ON_SPLIT", "true"),
+            os.getenv("DISCORD_REPEAT_LEADING_MENTIONS_ON_SPLIT", "false"),
         )
         repeat = repeat_raw.lower().strip() in ("true", "1", "yes", "on")
 
