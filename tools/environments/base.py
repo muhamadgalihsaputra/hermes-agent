@@ -451,9 +451,16 @@ class BaseEnvironment(ABC):
         parts.append(f"eval '{escaped}'")
         parts.append("__hermes_ec=$?")
 
-        # Re-dump env vars to snapshot (last-writer-wins for concurrent calls)
+        # Re-dump env vars to snapshot (last-writer-wins for concurrent calls).
+        # Runtime identity variables are deliberately excluded: HERMES_SESSION_*
+        # and HERMES_CRON_* describe the *current* agent/chat/cron execution,
+        # not durable shell state.  Persisting them caused cron runtime IDs such
+        # as ``cron_<job>_<time>`` to leak into later resumed platform sessions
+        # when the same terminal environment snapshot was re-sourced.
         if self._snapshot_ready:
-            parts.append(f"export -p > {_quoted_snap} 2>/dev/null || true")
+            parts.append(
+                f"export -p | grep -Ev '^declare -x HERMES_(SESSION|CRON)_' > {_quoted_snap} 2>/dev/null || true"
+            )
 
         # Write CWD to file (local reads this) and stdout marker (remote parses this)
         parts.append(f"pwd -P > {_quoted_cwd_file} 2>/dev/null || true")
