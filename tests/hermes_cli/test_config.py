@@ -641,8 +641,8 @@ class TestSanitizeEnvLines:
         assert required <= set(_EXTRA_ENV_KEYS)
 
         lines = [
-            "OPENAI_COMPATIBLE_IMAGE_BASE_URL=http://localhost:20128/v1"
-            "OPENAI_COMPATIBLE_IMAGE_MODEL=together/black-forest-labs/FLUX.2-pro\n"
+            "OPENAI_COMPATIBLE_IMAGE_BASE_URL=http://localhost:20128/v1\n",
+            "OPENAI_COMPATIBLE_IMAGE_MODEL=together/black-forest-labs/FLUX.2-pro\n",
         ]
         result = _sanitize_env_lines(lines)
         assert result == [
