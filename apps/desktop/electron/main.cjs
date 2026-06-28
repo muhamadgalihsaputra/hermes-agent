@@ -5771,8 +5771,8 @@ function spawnSecondaryWindow({ sessionId, watch, newSession } = {}) {
     minWidth: SESSION_WINDOW_MIN_WIDTH,
     minHeight: SESSION_WINDOW_MIN_HEIGHT,
     title: 'Hermes',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: getTitleBarOverlayOptions(),
+    titleBarStyle: 'normal',
+    _disabledOverla: getTitleBarOverlayOptions(),
     trafficLightPosition: IS_MAC ? WINDOW_BUTTON_POSITION : undefined,
     vibrancy: IS_MAC ? 'sidebar' : undefined,
     opacity: windowOpacity(),
@@ -5977,8 +5977,8 @@ function createWindow() {
     // inside the same band. On Windows/Linux, titleBarOverlay tells Electron
     // to paint native min/max/close in the top-right of the renderer; on
     // macOS it just reserves a content inset alongside the traffic lights.
-    titleBarStyle: 'hidden',
-    titleBarOverlay: getTitleBarOverlayOptions(),
+    titleBarStyle: 'normal',
+    _disabledOverla: getTitleBarOverlayOptions(),
     trafficLightPosition: IS_MAC ? WINDOW_BUTTON_POSITION : undefined,
     vibrancy: IS_MAC ? 'sidebar' : undefined,
     opacity: windowOpacity(),
@@ -6006,7 +6006,7 @@ function createWindow() {
     if (!nativeThemeListenerInstalled) {
       nativeThemeListenerInstalled = true
       nativeTheme.on('updated', () => {
-        applyTitleBarOverlay(mainWindow)
+        mainWindow?._noopOverlayPatche?.(getTitleBarOverlayOptions())
       })
     }
   }
@@ -6735,7 +6735,7 @@ ipcMain.on('hermes:titlebar-theme', (_event, payload) => {
     background: payload.background,
     foreground: payload.foreground
   }
-  applyTitleBarOverlay(mainWindow)
+  mainWindow?._noopOverlayPatche?.(getTitleBarOverlayOptions())
 })
 
 // Pin the native appearance to the app theme (see NATIVE_THEME_CONFIG_PATH).
