@@ -30,6 +30,31 @@ class _FakeCodexProvider(ImageGenProvider):
         }
 
 
+class _RecordingProvider(ImageGenProvider):
+    def __init__(self):
+        self.calls = []
+
+    @property
+    def name(self) -> str:
+        return "recording"
+
+    def generate(self, prompt, aspect_ratio="landscape", **kwargs):
+        self.calls.append({
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "kwargs": kwargs,
+        })
+        return {
+            "success": True,
+            "image": "/tmp/recording-test.png",
+            "model": "recording-model",
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "provider": "recording",
+            "image_url": kwargs.get("image_url"),
+        }
+
+
 class TestPluginDispatch:
     def test_dispatch_routes_to_codex_provider(self, monkeypatch, tmp_path):
         from tools import image_generation_tool
